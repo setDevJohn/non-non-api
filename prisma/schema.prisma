@@ -1,0 +1,255 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// USERS
+// ============================================================================
+
+model User {
+  id                String   @id @default(uuid())
+  email             String   @unique
+  passwordHash      String
+  name              String
+  photoUrl          String?
+  heightCm          Int?
+  weightKg          Float?
+  hydrationMode     String   @default("28ml") // "28ml" or "35ml"
+  hydrationGoalMl   Int      @default(2000)
+  birthDate         DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  eventParticipants EventParticipant[]
+  eventAdmins       EventAdmin[]
+  workouts          Workout[]
+  hydrationLogs     HydrationLog[]
+  posts             Post[]
+  comments          Comment[]
+  likes             Like[]
+  userBadges        UserBadge[]
+  notifications     Notification[]
+  sentNotifications Notification[] @relation("SentNotifications")
+
+  @@map("users")
+}
+
+// ============================================================================
+// EVENTS
+// ============================================================================
+
+model Event {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  startDate   DateTime
+  endDate     DateTime
+  status      String   @default("draft") // draft, waiting_confirmation, ready, active, finished, cancelled
+  entryFee    Float    @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  participants EventParticipant[]
+  admins       EventAdmin[]
+  workouts     Workout[]
+  posts        Post[]
+
+  @@map("events")
+}
+
+model EventParticipant {
+  id        String   @id @default(uuid())
+  eventId   String
+  userId    String
+  confirmed Boolean  @default(false)
+  joinedAt  DateTime @default(now())
+
+  // Relations
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@map("event_participants")
+}
+
+model EventAdmin {
+  id        String   @id @default(uuid())
+  eventId   String
+  userId    String
+  createdAt DateTime @default(now())
+
+  // Relations
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@map("event_admins")
+}
+
+// ============================================================================
+// WORKOUTS
+// ============================================================================
+
+model Workout {
+  id           String   @id @default(uuid())
+  userId       String
+  eventId      String?
+  workoutType  String
+  duration     Int      // in minutes
+  notes        String?
+  imageUrl     String?
+  pointsEarned Int      @default(0)
+  workoutDate  DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event Event? @relation(fields: [eventId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, workoutDate])
+  @@index([userId, workoutDate])
+  @@map("workouts")
+}
+
+// ============================================================================
+// HYDRATION
+// ============================================================================
+
+model HydrationLog {
+  id        String   @id @default(uuid())
+  userId    String
+  amountMl  Int
+  loggedAt  DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, loggedAt])
+  @@map("hydration_logs")
+}
+
+// ============================================================================
+// FEED & SOCIAL
+// ============================================================================
+
+model Post {
+  id        String   @id @default(uuid())
+  userId    String
+  eventId   String?
+  type      String   // workout, hydration, achievement, custom
+  content   String?
+  imageUrl  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event    Event?    @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  comments Comment[]
+  likes    Like[]
+
+  @@index([userId, createdAt])
+  @@map("posts")
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  postId    String
+  userId    String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([postId, createdAt])
+  @@map("comments")
+}
+
+model Like {
+  id        String   @id @default(uuid())
+  postId    String
+  userId    String
+  createdAt DateTime @default(now())
+
+  // Relations
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+  @@map("likes")
+}
+
+// ============================================================================
+// BADGES
+// ============================================================================
+
+model Badge {
+  id          String   @id @default(uuid())
+  name        String
+  description String
+  tier        String   // bronze, silver, gold
+  iconUrl     String?
+  criteria    String   // JSON with criteria
+  createdAt   DateTime @default(now())
+
+  // Relations
+  userBadges UserBadge[]
+
+  @@map("badges")
+}
+
+model UserBadge {
+  id         String   @id @default(uuid())
+  userId     String
+  badgeId    String
+  progress   Int      @default(0)
+  earnedAt   DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badge Badge @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, badgeId])
+  @@map("user_badges")
+}
+
+// ============================================================================
+// NOTIFICATIONS
+// ============================================================================
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  senderId  String?
+  type      String   // system, social, event
+  title     String
+  message   String
+  data      String?  // JSON with additional data
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  // Relations
+  user   User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sender User? @relation("SentNotifications", fields: [senderId], references: [id])
+
+  @@index([userId, read, createdAt])
+  @@index([senderId])
+  @@map("notifications")
+}
