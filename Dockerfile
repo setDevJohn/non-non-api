@@ -46,9 +46,5 @@ COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 # Porta da aplicação
 EXPOSE 3000
 
-# Health Check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
-
 # Executa migrations e inicia a aplicação
 CMD ["sh", "-c", "npx prisma migrate deploy && npm run start:prod"]
