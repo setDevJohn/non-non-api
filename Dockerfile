@@ -1,53 +1,54 @@
-# Build stage
-FROM node:20-alpine AS builder
+# =========================
+# Build Stage
+# =========================
+FROM node:20-slim AS builder
 
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
+# Instala OpenSSL para o Prisma
+RUN apt-get update && apt-get install -y openssl
 
-# Install dependencies
+# Dependências
+COPY package*.json ./
 RUN npm ci
 
-# Copy source code
+# Código-fonte
 COPY . .
 
-# Generate migrations
-RUN npx prisma migrate deploy
-
-# Generate Prisma Client
+# Gera o Prisma Client
 RUN npx prisma generate
 
-# Build the application
+# Build da aplicação
 RUN npm run build
 
-# Production stage
-FROM node:20-alpine AS production
+
+# =========================
+# Production Stage
+# =========================
+FROM node:20-slim AS production
 
 WORKDIR /app
 
-# Copy package files
+# Instala OpenSSL para o Prisma
+RUN apt-get update && apt-get install -y openssl
+
+# Dependências de produção
 COPY package*.json ./
+RUN npm ci --omit=dev
 
-# Install only production dependencies
-RUN npm ci --only=production
-
-# Copy built application from builder
+# Aplicação compilada
 COPY --from=builder /app/dist ./dist
 
-# Copy Prisma files
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+# Prisma
 COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 
-# Generate Prisma Client in production
-RUN npx prisma generate
-
-# Expose port
+# Porta da aplicação
 EXPOSE 3000
 
-# Health check
+# Health Check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
 
-# Start the application
-CMD ["npm", "run", "start:prod"]
+# Executa migrations e inicia a aplicação
+CMD ["sh", "-c", "npx prisma migrate deploy && npm run start:prod"]
